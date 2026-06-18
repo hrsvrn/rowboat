@@ -3,7 +3,23 @@
 // Forge loads configs with require(), which fails on ESM files
 
 const path = require('path');
+const { execSync } = require('child_process');
 const pkg = require('./package.json');
+
+// The pacman maker shells out to `makepkg`, which only exists on Arch-based
+// hosts. Forge treats a *configured* maker that reports unsupported as a hard
+// error ("the maker declared that it cannot run on linux"), so a normal Ubuntu
+// CI runner without makepkg would fail the whole make/publish. Only register
+// the maker when makepkg is actually available; skip it cleanly otherwise.
+function hasMakepkg() {
+    if (process.platform !== 'linux') return false;
+    try {
+        execSync('command -v makepkg', { stdio: 'ignore' });
+        return true;
+    } catch {
+        return false;
+    }
+}
 
 module.exports = {
     packagerConfig: {
@@ -88,7 +104,7 @@ module.exports = {
                 }
             }
         },
-        {
+        ...(hasMakepkg() ? [{
             name: require.resolve('./makers/maker-pacman.cjs'),
             platforms: ['linux'],
             config: {
@@ -102,7 +118,7 @@ module.exports = {
                 icon: path.join(__dirname, 'icons/icon.png'),
                 mimeType: ['x-scheme-handler/rowboat'],
             }
-        },
+        }] : []),
         {
             name: '@electron-forge/maker-zip',
             platform: ["darwin", "win32", "linux"],
